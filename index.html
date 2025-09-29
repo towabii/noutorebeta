@@ -45,7 +45,6 @@
 
             .app {
                 width: 100%;
-                max-width: 1800px;
                 display: grid;
                 gap: clamp(12px, 2vw, 24px);
                 align-items: start;
@@ -63,14 +62,16 @@
             .app.single-player-mode .side-panel.right { order: 3; }
 
             .app.vs-cpu-mode {
-                grid-template-columns: clamp(180px, 15vw, 240px) min-content auto min-content clamp(180px, 15vw, 240px);
-                max-width: 2400px;
+                grid-template-columns: clamp(180px, 15vw, 240px) min-content clamp(100px, 10vw, 150px) min-content clamp(100px, 10vw, 150px);
             }
 
             .app.vs-cpu-mode .side-panel.left { order: 1; }
-            .app.vs-cpu-mode .game-container { order: 2; }
-            .app.vs-cpu-mode #cpu-container { order: 3; }
-            .app.vs-cpu-mode .side-panel.right { order: 4; }
+            .app.vs-cpu-mode .game-container#player-game-container { order: 2; }
+            .app.vs-cpu-mode .side-panel.player-next-panel { order: 3; }
+            .app.vs-cpu-mode #cpu-container { order: 4; }
+            .app.vs-cpu-mode .side-panel.cpu-info-panel { order: 5; }
+            .app.vs-cpu-mode .side-panel.right { display: none; }
+
 
             .app.game-inactive-blur::before {
                 content: '';
@@ -186,10 +187,13 @@
                 text-shadow: 0 0 15px #fff, 0 0 25px var(--accent-color);
                 margin: 0;
                 white-space: nowrap;
-                animation: gameover-text-zoom 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
                 transform: scale(0.5);
                 opacity: 0;
             }
+            #gameover-screen .overlay-content h2 {
+                animation: gameover-text-zoom 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            }
+
             @keyframes gameover-text-zoom { to { transform: scale(1); opacity: 1; } }
 
             .overlay-content p { font-size: 20px; margin-top: 8px; margin-bottom: 24px; }
@@ -363,7 +367,7 @@
             
             @media (max-width: 1200px) {
                 .app.vs-cpu-mode { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
-                .app.vs-cpu-mode #cpu-container { display: none; }
+                .app.vs-cpu-mode #cpu-container, .app.vs-cpu-mode .side-panel.player-next-panel, .app.vs-cpu-mode .side-panel.cpu-info-panel { display: none; }
                 .app.vs-cpu-mode .side-panel { flex-direction: row; justify-content: space-around; }
             }
             @media (max-width: 980px) {
@@ -371,7 +375,7 @@
                 .side-panel.left { order: 2; }
                 .game-container { order: 1; }
                 .side-panel.right { order: 3; }
-                #cpu-container { display: none !important; }
+                #cpu-container, .side-panel.player-next-panel, .side-panel.cpu-info-panel { display: none !important; }
                 .side-panel { flex-direction: row; justify-content: space-around; }
                 .panel-card { flex: 1; }
                 .title { font-size: 20px; }
@@ -587,6 +591,15 @@ PR .............................. 底原永和
                         <div class="board" id="board"></div>
                     </div>
                 </main>
+
+                <!-- Player's NEXT panel for VS modes -->
+                <aside class="side-panel player-next-panel hidden">
+                    <div class="panel-card">
+                        <h3>NEXT</h3>
+                        <div class="preview-box" id="playerNextContainerVS"></div>
+                    </div>
+                </aside>
+                
                 <main id="cpu-container" class="game-container hidden" style="transform: scale(0.85); transform-origin: top center;">
                     <div class="game-header">
                         <div class="title">CPU</div>
@@ -596,8 +609,21 @@ PR .............................. 底原永和
                         <div class="board" id="cpu-board"></div>
                     </div>
                 </main>
-                <aside class="side-panel right">
+                
+                <!-- CPU's info panel for VS modes -->
+                <aside class="side-panel cpu-info-panel hidden">
                     <div class="panel-card">
+                        <h3>NEXT</h3>
+                        <div class="preview-box" id="cpuNextContainer"></div>
+                    </div>
+                    <div class="panel-card">
+                        <h3>HOLD</h3>
+                        <div class="preview-box" id="cpuHoldContainer"></div>
+                    </div>
+                </aside>
+                
+                <aside class="side-panel right">
+                    <div class="panel-card" id="sp-next-panel">
                         <h3>NEXT</h3>
                         <div class="preview-box" id="nextContainer"></div>
                     </div>
@@ -842,16 +868,19 @@ PR .............................. 底原永和
                 const COMBO_ATTACK = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6];
                 const CPU_LEVELS = { 1: { thinkTime: 700, actionInterval: 150, mistakeChance: 0.5, weights: { AGG_H: -0.4, COMP_L: 0.6, HOLES: -0.3, BUMP: -0.1, WELLS: -0.2 } }, 2: { thinkTime: 600, actionInterval: 130, mistakeChance: 0.4, weights: { AGG_H: -0.45, COMP_L: 0.7, HOLES: -0.4, BUMP: -0.15, WELLS: -0.25 } }, 3: { thinkTime: 500, actionInterval: 110, mistakeChance: 0.3, weights: { AGG_H: -0.5, COMP_L: 0.8, HOLES: -0.5, BUMP: -0.2, WELLS: -0.3 } }, 4: { thinkTime: 400, actionInterval: 100, mistakeChance: 0.2, weights: { AGG_H: -0.5, COMP_L: 0.9, HOLES: -0.6, BUMP: -0.2, WELLS: -0.3 } }, 5: { thinkTime: 300, actionInterval: 90, mistakeChance: 0.1, weights: { AGG_H: -0.55, COMP_L: 1.0, HOLES: -0.7, BUMP: -0.25, WELLS: -0.35 } }, 6: { thinkTime: 200, actionInterval: 80, mistakeChance: 0.05, weights: { AGG_H: -0.55, COMP_L: 1.1, HOLES: -0.8, BUMP: -0.25, WELLS: -0.35 } }, 7: { thinkTime: 150, actionInterval: 70, mistakeChance: 0.02, weights: { AGG_H: -0.6, COMP_L: 1.2, HOLES: -0.9, BUMP: -0.3, WELLS: -0.4 } }, 8: { thinkTime: 100, actionInterval: 60, mistakeChance: 0.01, weights: { AGG_H: -0.6, COMP_L: 1.2, HOLES: -0.9, BUMP: -0.3, WELLS: -0.4 } }, 9: { thinkTime: 50, actionInterval: 50, mistakeChance: 0, weights: { AGG_H: -0.6, COMP_L: 1.2, HOLES: -0.9, BUMP: -0.3, WELLS: -0.4 } } };
                 
-                const appContainer = document.getElementById('appContainer'), playerGameContainer = document.getElementById('player-game-container'), boardEl = document.getElementById('board'), scoreBox = document.getElementById('scoreBox'), highScoreEl = document.getElementById('highScore'), currentScoreEl = document.getElementById('currentScore'), forceRestartBtn = document.getElementById('forceRestartBtn'), linesEl = document.getElementById('lines'), levelEl = document.getElementById('level'), nextContainer = document.getElementById('nextContainer'), holdContainer = document.getElementById('holdContainer'), gameOverlay = document.getElementById('game-overlay'), startScreen = document.getElementById('start-screen'), gameoverScreen = document.getElementById('gameover-screen'), gameoverTitle = document.getElementById('gameover-title'), gameoverResult = document.getElementById('gameover-result'), restartButton = document.getElementById('restartButton'), pauseScreen = document.getElementById('pause-screen'), resumeButton = document.getElementById('resumeButton'), pauseButton = document.getElementById('pauseButton'), modeInfoPanel = document.getElementById('modeInfoPanel'), modeInfoTitle = document.getElementById('modeInfoTitle'), modeInfoContent = document.getElementById('modeInfoContent'), countdownEl = document.getElementById('countdown');
+                const appContainer = document.getElementById('appContainer'), playerGameContainer = document.getElementById('player-game-container'), boardEl = document.getElementById('board'), scoreBox = document.getElementById('scoreBox'), highScoreEl = document.getElementById('highScore'), currentScoreEl = document.getElementById('currentScore'), forceRestartBtn = document.getElementById('forceRestartBtn'), linesEl = document.getElementById('lines'), levelEl = document.getElementById('level'), holdContainer = document.getElementById('holdContainer'), gameOverlay = document.getElementById('game-overlay'), startScreen = document.getElementById('start-screen'), gameoverScreen = document.getElementById('gameover-screen'), gameoverTitle = document.getElementById('gameover-title'), gameoverResult = document.getElementById('gameover-result'), restartButton = document.getElementById('restartButton'), pauseScreen = document.getElementById('pause-screen'), resumeButton = document.getElementById('resumeButton'), pauseButton = document.getElementById('pauseButton'), modeInfoPanel = document.getElementById('modeInfoPanel'), modeInfoTitle = document.getElementById('modeInfoTitle'), modeInfoContent = document.getElementById('modeInfoContent'), countdownEl = document.getElementById('countdown');
                 const cpuContainer = document.getElementById('cpu-container'), cpuBoardEl = document.getElementById('cpu-board'), cpuLevelBox = document.getElementById('cpu-level-box');
                 const vsCpuBtn = document.getElementById('vs-cpu-btn'), vsCpuSelect = document.getElementById('vs-cpu-select');
                 const ultraVsCpuBtn = document.getElementById('ultra-vs-cpu-btn'), ultraVsCpuSelect = document.getElementById('ultra-vs-cpu-select');
                 const hamburgerIcon = document.getElementById('hamburger-icon'), menuPanel = document.getElementById('menu-panel'), menuRestartBtn = document.getElementById('menu-restart-btn'), soundToggle = document.getElementById('sound-toggle'), menuCheatBtn = document.getElementById('menu-cheat-btn');
+                const spNextPanel = document.getElementById('sp-next-panel'), nextContainer = document.getElementById('nextContainer');
+                const playerNextPanelVS = document.querySelector('.side-panel.player-next-panel'), playerNextContainerVS = document.getElementById('playerNextContainerVS');
+                const cpuInfoPanel = document.querySelector('.side-panel.cpu-info-panel'), cpuNextContainer = document.getElementById('cpuNextContainer'), cpuHoldContainer = document.getElementById('cpuHoldContainer');
 
                 let player = {};
                 let cpu = null;
                 
-                let pieceBag, sharedNextPiece, isPaused, isOver, gameMode, cpuLevel, bestScores = {}, keys = {};
+                let isPaused, isOver, gameMode, cpuLevel, bestScores = {}, keys = {};
                 let lastTime = 0, animationFrameId, countdownInterval, cpuActionInterval, gameTimer, gameInterval;
                 let dasTimer, arrTimer, softDropTimer, keyMap, actionToChange = null;
 
@@ -862,7 +891,9 @@ PR .............................. 底原永和
                 const createPlayerState = (isCPU = false) => ({
                     board: Array(ROWS).fill(0).map(() => Array(COLS).fill(null)),
                     currentPiece: null,
+                    nextPiece: null,
                     heldPiece: null,
+                    pieceBag: [],
                     canHold: true,
                     score: 0,
                     lines: 0,
@@ -910,22 +941,24 @@ PR .............................. 底原永和
                     cpuLevel = 0;
                     if (gameMode.startsWith('VS_CPU') || gameMode.startsWith('ULTRA_VS_CPU')) {
                         cpuLevel = parseInt(mode.split('_').pop(), 10);
-                        if(gameMode.startsWith('ULTRA_VS_CPU')) {
-                            gameMode = 'ULTRA_VS_CPU';
-                        } else {
-                            gameMode = 'VS_CPU';
-                        }
+                        gameMode = gameMode.startsWith('ULTRA_VS_CPU') ? 'ULTRA_VS_CPU' : 'VS_CPU';
                         cpuLevelBox.textContent = `LV.${cpuLevel}`;
                     }
 
                     if (gameMode === 'VS_CPU' || gameMode === 'ULTRA_VS_CPU') {
-                        appContainer.classList.remove('single-player-mode');
-                        appContainer.classList.add('vs-cpu-mode');
+                        appContainer.className = 'app vs-cpu-mode';
                         cpuContainer.classList.remove('hidden');
+                        playerNextPanelVS.classList.remove('hidden');
+                        cpuInfoPanel.classList.remove('hidden');
+                        spNextPanel.classList.add('hidden');
+                        document.querySelector('.side-panel.right').classList.add('hidden');
                     } else {
-                        appContainer.classList.remove('vs-cpu-mode');
-                        appContainer.classList.add('single-player-mode');
+                        appContainer.className = 'app single-player-mode';
                         cpuContainer.classList.add('hidden');
+                        playerNextPanelVS.classList.add('hidden');
+                        cpuInfoPanel.classList.add('hidden');
+                        spNextPanel.classList.remove('hidden');
+                        document.querySelector('.side-panel.right').classList.remove('hidden');
                     }
 
                     startScreen.classList.add('hidden');
@@ -951,15 +984,17 @@ PR .............................. 底原永和
                     pauseButton.textContent = "停止";
 
                     player = createPlayerState();
-                    cpu = (gameMode === 'VS_CPU' || gameMode === 'ULTRA_VS_CPU') ? createPlayerState(true) : null;
-                    
-                    pieceBag = [];
-                    fillPieceBag();
-                    sharedNextPiece = getNextPieceFromBag();
-                    
+                    fillPieceBag(player);
+                    player.nextPiece = getNextPieceFromBag(player);
                     spawnPiece(player);
-                    if (cpu) spawnPiece(cpu);
 
+                    cpu = (gameMode === 'VS_CPU' || gameMode === 'ULTRA_VS_CPU') ? createPlayerState(true) : null;
+                    if (cpu) {
+                        fillPieceBag(cpu);
+                        cpu.nextPiece = getNextPieceFromBag(cpu);
+                        spawnPiece(cpu);
+                    }
+                    
                     if (gameInterval) clearInterval(gameInterval);
                     if (cpuActionInterval) clearInterval(cpuActionInterval);
 
@@ -1042,23 +1077,23 @@ PR .............................. 底原永和
                     }
                 }
 
-                function fillPieceBag() {
+                function fillPieceBag(target) {
                     const p = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
                     for (let i = p.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
-                    pieceBag.push(...p);
+                    target.pieceBag.push(...p);
                 }
 
-                function getNextPieceFromBag() {
-                    if (pieceBag.length < 7) fillPieceBag();
-                    const name = pieceBag.shift();
+                function getNextPieceFromBag(target) {
+                    if (target.pieceBag.length < 7) fillPieceBag(target);
+                    const name = target.pieceBag.shift();
                     const piece = TETROMINOS[name];
                     return { ...piece, shape: JSON.parse(JSON.stringify(piece.shape)), x: Math.floor(COLS / 2) - Math.floor(piece.shape[0].length / 2) + (name === 'O' ? 1 : 0), y: name === 'I' ? -1 : 0, rotation: 0 };
                 }
                 
                 function spawnPiece(target) {
                     if(isOver || target.isOver) return;
-                    target.currentPiece = sharedNextPiece;
-                    sharedNextPiece = getNextPieceFromBag();
+                    target.currentPiece = target.nextPiece;
+                    target.nextPiece = getNextPieceFromBag(target);
                     resetLandingStatus(target);
                     if (!isValidMove(target.currentPiece, target.board)) {
                         gameOver(target);
@@ -1215,14 +1250,18 @@ PR .............................. 底原永和
 
                     if (gameMode === 'VS_CPU') {
                         const opponent = target.isCPU ? player : cpu;
-                        let garbageToTake = target.pendingGarbage - sentAttack;
-                        if (garbageToTake > 0) {
-                            const garbageAmount = Math.min(1, garbageToTake); 
-                            setTimeout(() => addGarbageLines(target, garbageAmount), 500); 
-                            target.pendingGarbage -= garbageAmount;
+                        let netAttack = sentAttack - target.pendingGarbage;
+                        
+                        if (netAttack < 0) {
+                            target.pendingGarbage = Math.abs(netAttack);
+                            const garbageToReceive = 1;
+                            setTimeout(() => addGarbageLines(target, garbageToReceive), 500);
+                            target.pendingGarbage -= garbageToReceive;
                         } else {
-                            opponent.pendingGarbage += Math.abs(garbageToTake);
                             target.pendingGarbage = 0;
+                            if (netAttack > 0) {
+                                opponent.pendingGarbage += netAttack;
+                            }
                         }
                     }
 
@@ -1315,8 +1354,9 @@ PR .............................. 底原永和
                 function createEmptyBoard(element) { element.innerHTML = Array.from({ length: ROWS * COLS }).map(() => `<div class="cell"></div>`).join(''); }
 
                 function draw(target, element) {
-                    if (!target || !element || (target.isOver && !isOver)) return;
+                    if (!target || !element || target.isOver) return;
                     const cells = Array.from(element.children);
+                    
                     cells.forEach(c => { c.innerHTML = ''; c.classList.remove('line-clearing'); });
                     
                     target.board.forEach((row, y) => row.forEach((color, x) => {
@@ -1328,15 +1368,38 @@ PR .............................. 底原永和
                         }
                     }));
 
-                    if (target.currentPiece && !target.isOver) {
+                    if (target.currentPiece) {
                         let ghostY = target.currentPiece.y;
                         while (isValidMove({ ...target.currentPiece, y: ghostY + 1 }, target.board)) ghostY++;
                         
                         target.currentPiece.shape.forEach((row, dy) => row.forEach((val, dx) => {
                             if (val) {
-                                const x = target.currentPiece.x + dx, y = target.currentPiece.y + dy, gy = ghostY + dy;
-                                if (gy >= 0 && cells[gy * COLS + x]) { const ghost = document.createElement('div'); ghost.className = 'ghost-tile'; cells[gy * COLS + x].appendChild(ghost); }
-                                if (y >= 0 && cells[y * COLS + x]) { const tile = document.createElement('div'); tile.className = 'tile'; tile.style.color = target.currentPiece.color; cells[y * COLS + x].appendChild(tile); }
+                                const x = target.currentPiece.x + dx;
+                                const gy = ghostY + dy;
+                                if(ghostY > target.currentPiece.y) {
+                                    const ghostCellIndex = (ghostY + dy) * COLS + x;
+                                    if (gy >= 0 && ghostCellIndex < cells.length && cells[ghostCellIndex]) {
+                                        const ghost = document.createElement('div');
+                                        ghost.className = 'ghost-tile';
+                                        cells[ghostCellIndex].appendChild(ghost);
+                                    }
+                                }
+                            }
+                        }));
+                        
+                        target.currentPiece.shape.forEach((row, dy) => row.forEach((val, dx) => {
+                            if (val) {
+                                const x = target.currentPiece.x + dx;
+                                const y = target.currentPiece.y + dy;
+                                if (y >= 0) {
+                                    const cellIndex = y * COLS + x;
+                                    if(cellIndex >=0 && cellIndex < cells.length && cells[cellIndex]) {
+                                        const tile = document.createElement('div');
+                                        tile.className = 'tile';
+                                        tile.style.color = target.currentPiece.color;
+                                        cells[cellIndex].appendChild(tile);
+                                    }
+                                }
                             }
                         }));
                     }
@@ -1386,12 +1449,22 @@ PR .............................. 底原永和
                         case 'ULTRA_VS_CPU': modeInfoTitle.textContent = "ULTRA VS CPU"; infoHtml = `<div class="scorebox"><span>TIME LEFT</span><span>${formatTime(gameTimer)}</span></div><div class="scorebox"><span>CPU SCORE</span><span>${cpu?.score || 0}</span></div>`; modeInfoPanel.classList.remove('hidden'); break;
                     }
                     modeInfoContent.innerHTML = infoHtml;
-                    drawPreview(nextContainer, sharedNextPiece);
+                    
+                    if (gameMode === 'VS_CPU' || gameMode === 'ULTRA_VS_CPU') {
+                        drawPreview(playerNextContainerVS, player.nextPiece);
+                    } else {
+                        drawPreview(nextContainer, player.nextPiece);
+                    }
                     drawPreview(holdContainer, player.heldPiece);
+                    
+                    if(cpu) {
+                        drawPreview(cpuNextContainer, cpu.nextPiece);
+                        drawPreview(cpuHoldContainer, cpu.heldPiece);
+                    }
 
                     if(devHUD.enabled) {
                       devHUD.progress.mode = gameMode; devHUD.progress.score = player.score; devHUD.progress.level = player.level; devHUD.progress.lines = player.lines; devHUD.progress.isOver = isOver;
-                      devHUD.data.currentPiece = player.currentPiece?.name || 'None'; devHUD.data.nextPiece = sharedNextPiece?.name || 'None'; devHUD.data.heldPiece = player.heldPiece?.name || 'None';
+                      devHUD.data.currentPiece = player.currentPiece?.name || 'None'; devHUD.data.nextPiece = player.nextPiece?.name || 'None'; devHUD.data.heldPiece = player.heldPiece?.name || 'None';
                     }
                 }
 
@@ -1407,6 +1480,10 @@ PR .............................. 底原永和
 
                     const processResults = () => {
                         const titleEl = gameoverScreen.querySelector('h2');
+                        titleEl.style.animation = 'none';
+                        void titleEl.offsetWidth;
+                        titleEl.style.animation = null; 
+
                         if (gameMode === 'VS_CPU') {
                             titleEl.textContent = loser.isCPU ? "YOU WIN!" : "YOU LOSE...";
                             gameoverResult.textContent = `CPU LV.${cpuLevel} との対戦結果`;
@@ -1437,9 +1514,13 @@ PR .............................. 底原永和
                     if (countdownInterval) clearInterval(countdownInterval);
                     if (gameInterval) clearInterval(gameInterval);
                     if (cpuActionInterval) clearInterval(cpuActionInterval);
-                    appContainer.classList.remove('vs-cpu-mode');
-                    appContainer.classList.add('single-player-mode');
+                    appContainer.className = 'app single-player-mode';
                     cpuContainer.classList.add('hidden');
+                    playerNextPanelVS.classList.add('hidden');
+                    cpuInfoPanel.classList.add('hidden');
+                    spNextPanel.classList.remove('hidden');
+                    document.querySelector('.side-panel.right').classList.remove('hidden');
+
                     countdownEl.classList.add('hidden');
                     gameOverlay.classList.remove('hidden');
                     startScreen.classList.remove('hidden');
@@ -1470,13 +1551,27 @@ PR .............................. 底原永和
                         if (e.key === 'Enter' && !e.target.closest('.modal-overlay')) { document.getElementById('fake-translator').classList.toggle('hidden'); return; }
                         if (e.key === 'Escape' && !isOver && !document.querySelector('.modal-overlay:not(.hidden)')) { e.preventDefault(); togglePause(); return; }
                         if (isPaused || isOver || (player && player.isOver) || document.querySelector('.modal-overlay:not(.hidden)')) return;
-                        if (!keys[e.key]) { const action = Object.keys(keyMap).find(act => keyMap[act].toLowerCase() === e.key.toLowerCase()); if (action) handleKeyPress(action); }
+                        if (!keys[e.key]) { 
+                            const action = Object.keys(keyMap).find(act => keyMap[act].toLowerCase() === e.key.toLowerCase()); 
+                            if (action) {
+                                e.preventDefault();
+                                handleKeyPress(action); 
+                            }
+                        }
                         keys[e.key] = true;
                     });
                     document.addEventListener('keyup', e => {
                         const action = Object.keys(keyMap).find(act => keyMap[act].toLowerCase() === e.key.toLowerCase());
-                        if (keys[e.key] && (action === 'moveLeft' || action === 'moveRight')) { clearTimeout(dasTimer); clearInterval(arrTimer); dasTimer = null; arrTimer = null; }
-                        if (keys[e.key] && action === 'softDrop') { clearInterval(softDropTimer); softDropTimer = null; }
+                        if (action === 'moveLeft' || action === 'moveRight') { 
+                            clearTimeout(dasTimer); 
+                            clearInterval(arrTimer); 
+                            dasTimer = null; 
+                            arrTimer = null;
+                        }
+                        if (action === 'softDrop') { 
+                            clearInterval(softDropTimer); 
+                            softDropTimer = null; 
+                        }
                         keys[e.key] = false;
                     });
                     window.addEventListener('blur', () => { keys = {}; clearAllInputTimers(); });
@@ -1485,9 +1580,9 @@ PR .............................. 底原永和
                 function handleKeyPress(action) {
                     if (isOver || isPaused || player.isOver) return;
                     switch (action) {
-                        case 'moveLeft': clearAllInputTimers(); move(player, -1); dasTimer = setTimeout(() => { arrTimer = setInterval(() => move(player, -1), ARR_DELAY); }, DAS_DELAY); break;
-                        case 'moveRight': clearAllInputTimers(); move(player, 1); dasTimer = setTimeout(() => { arrTimer = setInterval(() => move(player, 1), ARR_DELAY); }, DAS_DELAY); break;
-                        case 'softDrop': drop(player); softDropTimer = setInterval(() => drop(player), SOFT_DROP_DELAY); break;
+                        case 'moveLeft': if(!dasTimer) { move(player, -1); dasTimer = setTimeout(() => { arrTimer = setInterval(() => move(player, -1), ARR_DELAY); }, DAS_DELAY); } break;
+                        case 'moveRight': if(!dasTimer) { move(player, 1); dasTimer = setTimeout(() => { arrTimer = setInterval(() => move(player, 1), ARR_DELAY); }, DAS_DELAY); } break;
+                        case 'softDrop': if(!softDropTimer) { drop(player); softDropTimer = setInterval(() => drop(player), SOFT_DROP_DELAY); } break;
                         case 'hardDrop': hardDrop(player); break;
                         case 'rotateLeft': rotate(player, -1); break;
                         case 'rotateRight': rotate(player, 1); break;
@@ -1498,7 +1593,10 @@ PR .............................. 底原永和
                 function playHardDropAnimation(target) { if (lowAnimationMode) return; playerGameContainer.classList.add('shake-hard-drop'); setTimeout(()=> playerGameContainer.classList.remove('shake-hard-drop'), 150); for (let i = 0; i < 15; i++) { const p = document.createElement('div'); p.className = 'particle'; document.body.appendChild(p); const rect = boardEl.getBoundingClientRect(), cw = rect.width / COLS, ch = rect.height / ROWS, sx = rect.left + (Math.random() * COLS) * cw, sy = rect.top + (target.currentPiece.y + 0.5) * ch; p.style.left = `${sx}px`; p.style.top = `${sy}px`; const ang = Math.random() * Math.PI - Math.PI, vel = Math.random() * 80 + 40, ex = Math.cos(ang) * vel, ey = Math.sin(ang) * vel - 30; p.style.setProperty('--x', `${ex}px`); p.style.setProperty('--y', `${ey}px`); setTimeout(() => p.remove(), 600); } }
                 function playGameOverAnimation(target) {
                     return new Promise(resolve => {
-                        if (!target || target.isOver === false) return resolve();
+                        if (!target || target.isOver === false) {
+                            if(document.querySelector('.overlay-content h2')) document.querySelector('.overlay-content h2').style.animation = 'none';
+                             return resolve();
+                        }
                         let row = ROWS - 1;
                         const el = target.isCPU ? cpuBoardEl : boardEl;
                         const i = setInterval(() => {
@@ -1683,7 +1781,7 @@ PR .............................. 底原永和
                     };
                     checkPiece(target.currentPiece, false);
                     if (target.canHold) {
-                        const pieceToConsider = target.heldPiece || sharedNextPiece;
+                        const pieceToConsider = target.heldPiece || target.nextPiece;
                         checkPiece(pieceToConsider, true);
                     }
                     return moves.sort((a, b) => b.score - a.score);

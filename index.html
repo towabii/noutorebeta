@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響信号変換アプリ v13 (Final Polished Build)</title>
+    <title>音響信号変換アプリ v13 (Final Polished Build / 修正版)</title>
     <style>
         /* =================================
            CSSスタイル (一切省略なし)
@@ -128,31 +128,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================
     async function playSequence(sequence, textSpans) {
         let cumulativeTime = 0;
+        const baseTime = audioContext.currentTime;
+
         for (let i = 0; i < sequence.length; i++) {
             const {f1, f2} = sequence[i];
             const isCharSignal = i > 0 && i < sequence.length - 1;
-
+            const playTime = baseTime + cumulativeTime;
+            
+            // 視覚フィードバックのタイミングを調整
             if (isCharSignal && textSpans[i-1]) {
-                setTimeout(() => textSpans[i-1].classList.add('highlight'), cumulativeTime);
-                setTimeout(() => textSpans[i-1].classList.remove('highlight'), cumulativeTime + NOTE_DURATION * 1000);
+                setTimeout(() => textSpans[i-1].classList.add('highlight'), cumulativeTime * 1000);
+                setTimeout(() => textSpans[i-1].classList.remove('highlight'), (cumulativeTime + NOTE_DURATION) * 1000);
             }
 
-            const playTime = audioContext.currentTime + cumulativeTime / 1000;
+            // 音声のスケジューリング
             [f1, f2].forEach(freq => {
                 if (!freq) return;
-                const oscillator = audioContext.createOscillator(), gainNode = audioContext.createGain();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(freq, playTime);
                 gainNode.gain.setValueAtTime(0, playTime);
-                gainNode.gain.linearRampToValueAtTime(0.5, playTime + 0.01); // 音量を0.5に
+                gainNode.gain.linearRampToValueAtTime(0.5, playTime + 0.01);
                 gainNode.gain.linearRampToValueAtTime(0, playTime + NOTE_DURATION);
                 oscillator.connect(gainNode).connect(audioContext.destination);
                 oscillator.start(playTime);
                 oscillator.stop(playTime + NOTE_DURATION);
             });
-            cumulativeTime += (NOTE_DURATION + PAUSE_DURATION) * 1000;
+            cumulativeTime += NOTE_DURATION + PAUSE_DURATION;
         }
-        return new Promise(resolve => setTimeout(resolve, cumulativeTime));
+        return new Promise(resolve => setTimeout(resolve, cumulativeTime * 1000));
     }
     
     // =================================
@@ -180,10 +185,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function findClosestSignalFromData(data) {
-        const threshold = -55; const freqToIndex = freq => Math.round(freq * analyser.fftSize / audioContext.sampleRate);
+        const threshold = -55; 
+        const freqToIndex = freq => Math.round(freq * analyser.fftSize / audioContext.sampleRate);
+        
+        // 開始/終了信号を優先的にチェック
         if (data[freqToIndex(START_SIGNAL_FREQ)] > threshold) return { type: 'START' };
         if (data[freqToIndex(END_SIGNAL_FREQ)] > threshold) return { type: 'END' };
-        for (const char in charToFreqPair) { const {f1, f2} = charToFreqPair[char]; if (data[freqToIndex(f1)] > threshold && data[freqToIndex(f2)] > threshold) return { type: 'CHAR', char: char }; }
+        
+        // 文字信号をチェック
+        for (const char in charToFreqPair) { 
+            const {f1, f2} = charToFreqPair[char]; 
+            if (data[freqToIndex(f1)] > threshold && data[freqToIndex(f2)] > threshold) {
+                return { type: 'CHAR', char: char }; 
+            }
+        }
         return null;
     }
 
@@ -193,59 +208,115 @@ document.addEventListener('DOMContentLoaded', () => {
             audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const source = audioContext.createMediaStreamSource(audioStream);
             analyser = audioContext.createAnalyser();
-            analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0.5;
+            analyser.fftSize = 8192; 
+            analyser.smoothingTimeConstant = 0.5;
             source.connect(analyser);
-            isListening = true; listeningState = 'IDLE';
-            listenButton.textContent = '停止'; playButton.disabled = true;
-            statusText.textContent = '「開始信号」待機中...'; resultDisplay.textContent = '';
+            isListening = true; 
+            listeningState = 'IDLE';
+            listenButton.textContent = '停止'; 
+            playButton.disabled = true;
+            statusText.textContent = '「開始信号」待機中...'; 
+            resultDisplay.textContent = '';
             kanjiConvertButton.style.display = 'none';
             analyzeSound();
-        } catch (err) { statusText.textContent = 'マイクの起動に失敗。アクセスを許可してください。'; console.error("マイク起動エラー:", err); isListening = false; }
+        } catch (err) { 
+            statusText.textContent = 'マイクの起動に失敗。アクセスを許可してください。'; 
+            console.error("マイク起動エラー:", err); 
+            isListening = false; 
+        }
     }
 
     function stopListening() {
         if (audioStream) audioStream.getTracks().forEach(track => track.stop());
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
         isListening = false;
-        listenButton.textContent = 'マイクで読み取り開始'; playButton.disabled = false;
+        listenButton.textContent = 'マイクで読み取り開始'; 
+        playButton.disabled = false;
         statusText.textContent = '待機中';
         resultDisplay.classList.remove('receiving');
     }
 
     // =================================
-    // 機能3: かな漢字変換
+    // 機能3: かな漢字変換 (★修正箇所)
     // =================================
-    async function convertToKanji() { /* ... v12と同じロジック ... */ }
+    async function convertToKanji() {
+        const text = resultDisplay.textContent;
+        if (!text) return;
+        
+        kanjiConvertButton.textContent = '変換中...';
+        kanjiConvertButton.disabled = true;
+        
+        try {
+            // 注意: このGoogle Transliterate APIは非公式であり、現在ではCORSポリシーなどにより動作しない可能性が非常に高いです。
+            const url = `https://www.google.com/transliterate?langpair=ja-Hira|ja&text=${encodeURIComponent(text)}`;
+            const res = await fetch(url);
+            
+            if (!res.ok) {
+                throw new Error(`API Error: ${res.statusText}`);
+            }
+            
+            const data = await res.json();
+            
+            if (data && data.length > 0 && data[0].length > 1 && data[0][1].length > 0) {
+                resultDisplay.textContent = data.map(segment => segment[1][0]).join('');
+            } else {
+                throw new Error('変換データが空、または予期しない形式です。');
+            }
+        } catch (e) {
+            statusText.textContent = '漢字変換に失敗しました。現在この機能は利用できない可能性があります。';
+            console.error("漢字変換エラー:", e);
+        } finally {
+            kanjiConvertButton.textContent = '漢字に変換';
+            kanjiConvertButton.disabled = false;
+            kanjiConvertButton.style.display = 'none'; // 変換後はボタンを非表示
+        }
+    }
 
     // =================================
     // イベントリスナー
     // =================================
-    themeToggle.addEventListener('change', () => { document.documentElement.classList.toggle('dark-mode'); localStorage.setItem('theme', themeToggle.checked ? 'dark' : 'light'); });
+    themeToggle.addEventListener('change', () => { 
+        document.documentElement.classList.toggle('dark-mode'); 
+        localStorage.setItem('theme', themeToggle.checked ? 'dark' : 'light'); 
+    });
     
     playButton.addEventListener('click', async () => {
         if (isTransmitting || isListening) return;
         if (!(await initializeAudioContext())) return;
+        
         const text = textInput.value;
         if (!text) return;
         
-        isTransmitting = true; playButton.disabled = true; listenButton.disabled = true;
+        isTransmitting = true; 
+        playButton.disabled = true; 
+        listenButton.disabled = true;
         statusText.textContent = "信号を送信中...";
         playbackDisplay.innerHTML = [...text].map(c => `<span>${c}</span>`).join('');
         const textSpans = playbackDisplay.querySelectorAll('span');
 
         const sequence = [{f1: START_SIGNAL_FREQ}];
-        for (const char of text) { if (charToFreqPair[char]) sequence.push(charToFreqPair[char]); }
+        for (const char of text) { 
+            if (charToFreqPair[char]) {
+                sequence.push(charToFreqPair[char]);
+            }
+        }
         sequence.push({f1: END_SIGNAL_FREQ});
         
         await playSequence(sequence, textSpans);
         
-        isTransmitting = false; playButton.disabled = false; listenButton.disabled = false;
+        isTransmitting = false; 
+        playButton.disabled = false; 
+        listenButton.disabled = false;
         statusText.textContent = "送信完了";
     });
     
-    listenButton.addEventListener('click', () => { if (isTransmitting) return; isListening ? stopListening() : startListening(); });
+    listenButton.addEventListener('click', () => { 
+        if (isTransmitting) return; 
+        isListening ? stopListening() : startListening(); 
+    });
     
-    kanjiConvertButton.addEventListener('click', async () => { const text = resultDisplay.textContent; if (!text) return; kanjiConvertButton.textContent = '変換中...'; kanjiConvertButton.disabled = true; try { const url = `https://www.google.com/transliterate?langpair=ja-Hira|ja&text=${encodeURIComponent(text)}`; const res = await fetch(url); if (!res.ok) throw new Error(`API Error: ${res.statusText}`); const data = await res.json(); if (data && data.length > 0) { resultDisplay.textContent = data.map(seg => seg[1][0]).join(''); } else { throw new Error('変換データが空'); } } catch (e) { statusText.textContent = '漢字変換に失敗しました。'; console.error(e); } finally { kanjiConvertButton.textContent = '漢字に変換'; kanjiConvertButton.disabled = false; kanjiConvertButton.style.display = 'none'; } });
+    // ★修正箇所: イベントリスナーから関数を呼び出すように変更
+    kanjiConvertButton.addEventListener('click', convertToKanji);
 });
 </script>
 </body>

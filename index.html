@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響信号変換アプリ v10 (Final)</title>
+    <title>音響信号変換アプリ v11 (Reliability Focused)</title>
     <style>
         /* CSSは変更ありません */
         :root { --bg-color: #f0f2f5; --fg-color: #ffffff; --text-color: #1c1c1e; --primary-color: #007aff; --primary-hover: #0056b3; --border-color: #e0e0e0; --shadow-color: rgba(0, 0, 0, 0.1); --success-color: #34c759; --error-color: #ff3b30; }
@@ -31,14 +31,13 @@
 <body>
 
 <div class="container">
-    <div class="header"><h1>音響信号 v10</h1> <label class="theme-switch"><input type="checkbox" id="theme-toggle"><span class="slider"></span></label></div>
-    <div class="section"><textarea id="text-input" placeholder="ひらがな・カタカナでメッセージを入力"></textarea><button id="play-button">音に変換して再生</button></div>
+    <div class="header"><h1>音響信号 v11</h1> <label class="theme-switch"><input type="checkbox" id="theme-toggle"><span class="slider"></span></label></div>
+    <div class="section"><textarea id="text-input" placeholder="ひらがな・カタカナで入力 (漢字は受信側で変換)"></textarea><button id="play-button">音に変換して再生</button></div>
     <div class="section"><button id="listen-button">マイクで読み取り開始</button><div class="receiver-area"><div id="result-display"></div><button id="kanji-convert-button">漢字に変換</button></div><p class="status" id="status-text">待機中</p></div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // kuromoji.jsとキャッシュ関連をすべて削除し、変数を簡略化
     let audioContext, audioStream, analyser, animationFrameId;
     let isListening = false, listeningState = 'IDLE', lastDetectionTime = 0;
 
@@ -47,37 +46,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('status-text'), themeToggle = document.getElementById('theme-toggle');
     const kanjiConvertButton = document.getElementById('kanji-convert-button');
 
-    const NOTE_DURATION = 0.12, PAUSE_DURATION = 0.08;
+    // ★★★ 修正点：信号タイミングの最適化 ★★★
+    const NOTE_DURATION = 0.13, PAUSE_DURATION = 0.09;
     const START_SIGNAL_FREQ = 300, END_SIGNAL_FREQ = 4000;
     const charToFreqPair = {};
 
     function assignFrequencies() {
-        const lowGroup = [697, 770, 852, 941, 1046, 1150];
-        const highGroup = Array.from({length: 20}, (_, i) => 1209 + i * 110);
+        // ★★★ 修正点：干渉しにくい周波数セットを手動で厳選 ★★★
+        const LOW_FREQUENCIES = [697, 770, 852, 941, 1046, 1150];
+        const HIGH_FREQUENCIES = [
+            1336, 1477, 1633, 1800, 1980, 2150, 2350, 2550, 2780, 3000, 
+            3250, 3500, 3750
+        ];
+        
         const allChars = `あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽぁぃぅぇぉゃゅょっアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポァィゥェォャュョッー、。？！「」`;
         const chars = [...new Set(allChars.split(''))].sort();
-        chars.forEach((char, i) => { const lowIndex = Math.floor(i / highGroup.length) % lowGroup.length; const highIndex = i % highGroup.length; if (lowIndex >= lowGroup.length) { console.error("文字セットが大きすぎます"); return; } charToFreqPair[char] = { f1: lowGroup[lowIndex], f2: highGroup[highIndex] }; });
+        
+        if (chars.length > LOW_FREQUENCIES.length * HIGH_FREQUENCIES.length) {
+            console.error("エラー: 対応文字数が周波数の組み合わせ上限を超えています。");
+            return;
+        }
+
+        chars.forEach((char, i) => {
+            const lowIndex = Math.floor(i / HIGH_FREQUENCIES.length) % LOW_FREQUENCIES.length;
+            const highIndex = i % HIGH_FREQUENCIES.length;
+            charToFreqPair[char] = { f1: LOW_FREQUENCIES[lowIndex], f2: HIGH_FREQUENCIES[highIndex] };
+        });
     }
     assignFrequencies();
-    
-    // 読み込み処理が不要になったため、即時準備完了
     
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches, savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark' || (!savedTheme && prefersDark)) { document.documentElement.classList.add('dark-mode'); themeToggle.checked = true; }
     themeToggle.addEventListener('change', () => { document.documentElement.classList.toggle('dark-mode'); localStorage.setItem('theme', themeToggle.checked ? 'dark' : 'light'); });
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    function initializeAudioContext() { if (!audioContext) audioContext = new AudioContext(); }
+    function initializeAudioContext() { if (!audioContext) audioContext = new Audio-Context(); }
 
     playButton.addEventListener('click', async () => {
         initializeAudioContext();
-        // ★★★ 変更点 ★★★ 漢字変換をせず、入力されたテキストを直接使う
         const text = textInput.value;
         if (!text) return;
         
         playButton.disabled = true;
         const sequence = [{f1: START_SIGNAL_FREQ}];
-        for (const char of text) { // textをそのままループ
+        for (const char of text) {
             if (charToFreqPair[char]) {
                 sequence.push(charToFreqPair[char]);
             }
@@ -94,9 +106,41 @@ document.addEventListener('DOMContentLoaded', () => {
     async function startListening() { try { audioStream = await navigator.mediaDevices.getUserMedia({audio:true}); const src = audioContext.createMediaStreamSource(audioStream); analyser = audioContext.createAnalyser(); analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0.5; src.connect(analyser); isListening = true; listeningState = 'IDLE'; listenButton.textContent = '停止'; statusText.textContent = '「開始信号」待機中...'; resultDisplay.textContent = ''; kanjiConvertButton.style.display = 'none'; analyzeSound(); } catch (err) { statusText.textContent = 'マイク起動失敗'; } }
     function stopListening() { if(audioStream) audioStream.getTracks().forEach(t=>t.stop()); cancelAnimationFrame(animationFrameId); isListening = false; listenButton.textContent = 'マイクで読み取り開始'; statusText.textContent = '待機中'; }
 
-    function analyzeSound() { if (!isListening) return; const data = new Float32Array(analyser.frequencyBinCount); analyser.getFloatFrequencyData(data); const signal = findClosestSignalFromData(data); const now = Date.now(); if (signal && now - lastDetectionTime > (NOTE_DURATION + PAUSE_DURATION) * 1000) { if (listeningState === 'IDLE' && signal.type === 'START') { listeningState = 'RECEIVING'; statusText.textContent = '信号受信中...'; } else if (listeningState === 'RECEIVING') { if (signal.type === 'END') { listeningState = 'IDLE'; statusText.textContent = '受信完了。「開始信号」待機中...'; if (resultDisplay.textContent) kanjiConvertButton.style.display = 'inline-block'; } else if (signal.type === 'CHAR') { resultDisplay.textContent += signal.char; } } lastDetectionTime = now; } animationFrameId = requestAnimationFrame(analyzeSound); }
+    function analyzeSound() {
+        if (!isListening) return;
+        const data = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatFrequencyData(data);
+        const signal = findClosestSignalFromData(data);
+        const now = Date.now();
+        if (signal && now - lastDetectionTime > (NOTE_DURATION + PAUSE_DURATION) * 1000 * 0.9) { // デバウンス時間を調整
+            if (listeningState === 'IDLE' && signal.type === 'START') {
+                listeningState = 'RECEIVING'; statusText.textContent = '信号受信中...';
+            } else if (listeningState === 'RECEIVING') {
+                if (signal.type === 'END') {
+                    listeningState = 'IDLE'; statusText.textContent = '受信完了。「開始信号」待機中...';
+                    if (resultDisplay.textContent) kanjiConvertButton.style.display = 'inline-block';
+                } else if (signal.type === 'CHAR') {
+                    resultDisplay.textContent += signal.char;
+                }
+            }
+            lastDetectionTime = now;
+        }
+        animationFrameId = requestAnimationFrame(analyzeSound);
+    }
     
-    function findClosestSignalFromData(data) { const threshold = -55; const freqToIndex = freq => Math.round(freq * analyser.fftSize / audioContext.sampleRate); if (data[freqToIndex(START_SIGNAL_FREQ)] > threshold) return { type: 'START' }; if (data[freqToIndex(END_SIGNAL_FREQ)] > threshold) return { type: 'END' }; for (const char in charToFreqPair) { const { f1, f2 } = charToFreqPair[char]; if (data[freqToIndex(f1)] > threshold && data[freqToIndex(f2)] > threshold) return { type: 'CHAR', char: char }; } return null; }
+    function findClosestSignalFromData(data) {
+        const threshold = -55;
+        const freqToIndex = freq => Math.round(freq * analyser.fftSize / audioContext.sampleRate);
+        if (data[freqToIndex(START_SIGNAL_FREQ)] > threshold) return { type: 'START' };
+        if (data[freqToIndex(END_SIGNAL_FREQ)] > threshold) return { type: 'END' };
+        for (const char in charToFreqPair) {
+            const { f1, f2 } = charToFreqPair[char];
+            if (data[freqToIndex(f1)] > threshold && data[freqToIndex(f2)] > threshold) {
+                return { type: 'CHAR', char: char };
+            }
+        }
+        return null;
+    }
 
     kanjiConvertButton.addEventListener('click', async () => { const hiraganaText = resultDisplay.textContent; if (!hiraganaText) return; kanjiConvertButton.textContent = '変換中...'; kanjiConvertButton.disabled = true; try { const url = `https://www.google.com/transliterate?langpair=ja-Hira|ja&text=${encodeURIComponent(hiraganaText)}`; const response = await fetch(url); const data = await response.json(); if (data && data.length > 0) { resultDisplay.textContent = data.map(segment => segment[1][0]).join(''); } else { throw new Error('変換結果が空です。'); } } catch (error) { statusText.textContent = '漢字への変換に失敗しました。'; } finally { kanjiConvertButton.textContent = '漢字に変換'; kanjiConvertButton.disabled = false; kanjiConvertButton.style.display = 'none'; } });
 });

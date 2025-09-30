@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響信号変換アプリ v9.1 (Stable)</title>
-    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js"></script>
+    <title>音響信号変換アプリ v10 (Final)</title>
     <style>
         /* CSSは変更ありません */
         :root { --bg-color: #f0f2f5; --fg-color: #ffffff; --text-color: #1c1c1e; --primary-color: #007aff; --primary-hover: #0056b3; --border-color: #e0e0e0; --shadow-color: rgba(0, 0, 0, 0.1); --success-color: #34c759; --error-color: #ff3b30; }
@@ -26,101 +25,32 @@
         #kanji-convert-button { position: absolute; bottom: 5px; right: 5px; padding: 0.3rem 0.8rem; font-size: 0.8rem; margin-top: 0; background-color: var(--success-color); display: none; }
         #result-display { margin-top: 1rem; padding: 1rem; border: 2px dashed var(--border-color); border-radius: 0.75rem; min-height: 50px; background-color: var(--bg-color); font-size: 1.2rem; font-weight: bold; color: var(--error-color); text-align: left; }
         .status { margin-top: 1rem; color: #8e8e93; font-style: italic; }
-        .loader { display: none; } .loader.active { display: block; margin-top: 1rem; }
-        .progress-bar { width: 100%; background-color: var(--border-color); border-radius: 5px; overflow: hidden; height: 10px; }
-        .progress-bar-inner { width: 0%; height: 100%; background-color: var(--primary-color); transition: width 0.2s; }
         @media (max-width: 600px) { body { padding: 0.5rem; } .container { padding: 1.5rem; } h1 { font-size: 1.5rem; } }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header"><h1>音響信号 v9.1</h1> <label class="theme-switch"><input type="checkbox" id="theme-toggle"><span class="slider"></span></label></div>
-    <div class="loader active" id="loader"><p id="loading-status">辞書の準備中...</p><div class="progress-bar"><div class="progress-bar-inner" id="progress-bar-inner"></div></div></div>
-    <div class="section"><textarea id="text-input" placeholder="漢字でメッセージを入力" disabled></textarea><button id="play-button" disabled>音に変換して再生</button></div>
-    <div class="section"><button id="listen-button" disabled>マイクで読み取り開始</button><div class="receiver-area"><div id="result-display"></div><button id="kanji-convert-button">漢字に変換</button></div><p class="status" id="status-text">待機中</p></div>
+    <div class="header"><h1>音響信号 v10</h1> <label class="theme-switch"><input type="checkbox" id="theme-toggle"><span class="slider"></span></label></div>
+    <div class="section"><textarea id="text-input" placeholder="ひらがな・カタカナでメッセージを入力"></textarea><button id="play-button">音に変換して再生</button></div>
+    <div class="section"><button id="listen-button">マイクで読み取り開始</button><div class="receiver-area"><div id="result-display"></div><button id="kanji-convert-button">漢字に変換</button></div><p class="status" id="status-text">待機中</p></div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', async () => {
-    // --- グローバル変数 ---
-    let audioContext, audioStream, analyser, animationFrameId, tokenizer;
+document.addEventListener('DOMContentLoaded', () => {
+    // kuromoji.jsとキャッシュ関連をすべて削除し、変数を簡略化
+    let audioContext, audioStream, analyser, animationFrameId;
     let isListening = false, listeningState = 'IDLE', lastDetectionTime = 0;
 
-    // --- DOM要素 ---
     const textInput = document.getElementById('text-input'), playButton = document.getElementById('play-button');
     const listenButton = document.getElementById('listen-button'), resultDisplay = document.getElementById('result-display');
-    const statusText = document.getElementById('status-text'), loader = document.getElementById('loader');
-    const loadingStatus = document.getElementById('loading-status'), progressBar = document.getElementById('progress-bar-inner');
-    const themeToggle = document.getElementById('theme-toggle'), kanjiConvertButton = document.getElementById('kanji-convert-button');
+    const statusText = document.getElementById('status-text'), themeToggle = document.getElementById('theme-toggle');
+    const kanjiConvertButton = document.getElementById('kanji-convert-button');
 
-    // --- 信号定義 & マッピング ---
     const NOTE_DURATION = 0.12, PAUSE_DURATION = 0.08;
     const START_SIGNAL_FREQ = 300, END_SIGNAL_FREQ = 4000;
     const charToFreqPair = {};
 
-    function assignFrequencies() { /* ... 変更なし ... */ }
-    assignFrequencies();
-
-    // --- IndexedDB & 辞書キャッシュ管理 ---
-    const DB_NAME = 'KuromojiDB', STORE_NAME = 'DictStore';
-    // ★★★ 修正点 ★★★ データベースのバージョンを上げる
-    const DB_VERSION = 2; 
-    const DIC_FILES = ['base.dat.gz', 'check.dat.gz', 'conn.dat.gz', 'unk.dat.gz', 'char.def.gz', 'unk.def.gz', 'tid.dat.gz', 'tid_pos.dat.gz', 'tid_map.dat.gz'];
-    
-    const openDB = () => new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onupgradeneeded = event => {
-            const db = event.target.result;
-            // 既に同じ名前のストアが存在するかチェックし、なければ作成する
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME);
-            }
-        };
-        request.onsuccess = event => resolve(event.target.result);
-        request.onerror = event => reject(event.target.error);
-    });
-
-    async function getCachedDict() { const db = await openDB(); return new Promise(res => { const tx = db.transaction(STORE_NAME, 'readonly'), st = tx.objectStore(STORE_NAME), f = {}; let c = 0; DIC_FILES.forEach(n => { st.get(n).onsuccess = e => { if (e.target.result) f[n] = e.target.result; if (++c === DIC_FILES.length) res(Object.keys(f).length === DIC_FILES.length ? f : null); }; }); }); }
-    async function cacheDict() { const db = await openDB(), tx = db.transaction(STORE_NAME, 'readwrite'), st = tx.objectStore(STORE_NAME), path="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/"; let l=0; for (const n of DIC_FILES) { const r = await fetch(path+n), d = await r.arrayBuffer(); st.put(d, n); l++; progressBar.style.width = `${(l/DIC_FILES.length)*100}%`; } return getCachedDict(); }
-    
-    (async function initialize() {
-        try {
-            let dic = await getCachedDict();
-            if (!dic) {
-                loadingStatus.textContent = '辞書をDL中... (初回のみ)';
-                dic = await cacheDict();
-            }
-            loadingStatus.textContent = '辞書を構築中...';
-            kuromoji.builder({ dicPath: null, dicFiles: dic }).build((err, _tokenizer) => {
-                if(err) { throw err; }
-                tokenizer = _tokenizer;
-                loader.style.display = 'none';
-                textInput.disabled = false; playButton.disabled = false; listenButton.disabled = false;
-            });
-        } catch (error) {
-            console.error("初期化に失敗しました:", error);
-            loadingStatus.textContent = "エラーが発生しました。リロードしてください。";
-            loadingStatus.style.color = "var(--error-color)";
-        }
-    })();
-    
-    // --- 以降のコードはv9から変更ありません ---
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches, savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) { document.documentElement.classList.add('dark-mode'); themeToggle.checked = true; }
-    themeToggle.addEventListener('change', () => { document.documentElement.classList.toggle('dark-mode'); localStorage.setItem('theme', themeToggle.checked ? 'dark' : 'light'); });
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    function initializeAudioContext() { if (!audioContext) audioContext = new AudioContext(); }
-    playButton.addEventListener('click', async () => { initializeAudioContext(); if (!textInput.value || !tokenizer) return; playButton.disabled = true; const tokens = tokenizer.tokenize(textInput.value); const hiragana = tokens.map(t => t.reading ? t.reading.replace(/[\u30a1-\u3F6]/g, m => String.fromCharCode(m.charCodeAt(0)-0x60)) : t.surface_form).join(''); const sequence = [{f1: START_SIGNAL_FREQ}]; for (const char of hiragana) { if (charToFreqPair[char]) sequence.push(charToFreqPair[char]); } sequence.push({f1: END_SIGNAL_FREQ}); await playSequence(sequence); playButton.disabled = false; });
-    function playSequence(sequence) { return new Promise(res => { let t = audioContext.currentTime; for (const {f1, f2} of sequence) { [f1, f2].forEach(freq => { if (!freq) return; const o = audioContext.createOscillator(), g = audioContext.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(freq, t); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.3,t+0.01); g.gain.linearRampToValueAtTime(0,t+NOTE_DURATION); o.connect(g).connect(audioContext.destination); o.start(t); o.stop(t+NOTE_DURATION); }); t+=NOTE_DURATION+PAUSE_DURATION; } setTimeout(res, (t-audioContext.currentTime)*1000); }); }
-    listenButton.addEventListener('click', () => { initializeAudioContext(); !isListening ? startListening() : stopListening(); });
-    async function startListening() { try { audioStream = await navigator.mediaDevices.getUserMedia({audio:true}); const src = audioContext.createMediaStreamSource(audioStream); analyser = audioContext.createAnalyser(); analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0.5; src.connect(analyser); isListening = true; listeningState = 'IDLE'; listenButton.textContent = '停止'; statusText.textContent = '「開始信号」待機中...'; resultDisplay.textContent = ''; kanjiConvertButton.style.display = 'none'; analyzeSound(); } catch (err) { statusText.textContent = 'マイク起動失敗'; } }
-    function stopListening() { if(audioStream) audioStream.getTracks().forEach(t=>t.stop()); cancelAnimationFrame(animationFrameId); isListening = false; listenButton.textContent = 'マイクで読み取り開始'; statusText.textContent = '待機中'; }
-    function analyzeSound() { if (!isListening) return; const data = new Float32Array(analyser.frequencyBinCount); analyser.getFloatFrequencyData(data); const signal = findClosestSignalFromData(data); const now = Date.now(); if (signal && now - lastDetectionTime > (NOTE_DURATION + PAUSE_DURATION) * 1000) { if (listeningState === 'IDLE' && signal.type === 'START') { listeningState = 'RECEIVING'; statusText.textContent = '信号受信中...'; } else if (listeningState === 'RECEIVING') { if (signal.type === 'END') { listeningState = 'IDLE'; statusText.textContent = '受信完了。「開始信号」待機中...'; if (resultDisplay.textContent) kanjiConvertButton.style.display = 'inline-block'; } else if (signal.type === 'CHAR') { resultDisplay.textContent += signal.char; } } lastDetectionTime = now; } animationFrameId = requestAnimationFrame(analyzeSound); }
-    function findClosestSignalFromData(data) { const threshold = -55; const freqToIndex = freq => Math.round(freq * analyser.fftSize / audioContext.sampleRate); if (data[freqToIndex(START_SIGNAL_FREQ)] > threshold) return { type: 'START' }; if (data[freqToIndex(END_SIGNAL_FREQ)] > threshold) return { type: 'END' }; for (const char in charToFreqPair) { const { f1, f2 } = charToFreqPair[char]; if (data[freqToIndex(f1)] > threshold && data[freqToIndex(f2)] > threshold) return { type: 'CHAR', char: char }; } return null; }
-    kanjiConvertButton.addEventListener('click', async () => { const hiraganaText = resultDisplay.textContent; if (!hiraganaText) return; kanjiConvertButton.textContent = '変換中...'; kanjiConvertButton.disabled = true; try { const url = `https://www.google.com/transliterate?langpair=ja-Hira|ja&text=${encodeURIComponent(hiraganaText)}`; const response = await fetch(url); const data = await response.json(); if (data && data.length > 0) { resultDisplay.textContent = data.map(segment => segment[1][0]).join(''); } else { throw new Error('変換結果が空です。'); } } catch (error) { statusText.textContent = '漢字への変換に失敗しました。'; } finally { kanjiConvertButton.textContent = '漢字に変換'; kanjiConvertButton.disabled = false; kanjiConvertButton.style.display = 'none'; } });
-    
-    // assignFrequenciesの実装（省略していたため追記）
     function assignFrequencies() {
         const lowGroup = [697, 770, 852, 941, 1046, 1150];
         const highGroup = Array.from({length: 20}, (_, i) => 1209 + i * 110);
@@ -128,6 +58,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         const chars = [...new Set(allChars.split(''))].sort();
         chars.forEach((char, i) => { const lowIndex = Math.floor(i / highGroup.length) % lowGroup.length; const highIndex = i % highGroup.length; if (lowIndex >= lowGroup.length) { console.error("文字セットが大きすぎます"); return; } charToFreqPair[char] = { f1: lowGroup[lowIndex], f2: highGroup[highIndex] }; });
     }
+    assignFrequencies();
+    
+    // 読み込み処理が不要になったため、即時準備完了
+    
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches, savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) { document.documentElement.classList.add('dark-mode'); themeToggle.checked = true; }
+    themeToggle.addEventListener('change', () => { document.documentElement.classList.toggle('dark-mode'); localStorage.setItem('theme', themeToggle.checked ? 'dark' : 'light'); });
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    function initializeAudioContext() { if (!audioContext) audioContext = new AudioContext(); }
+
+    playButton.addEventListener('click', async () => {
+        initializeAudioContext();
+        // ★★★ 変更点 ★★★ 漢字変換をせず、入力されたテキストを直接使う
+        const text = textInput.value;
+        if (!text) return;
+        
+        playButton.disabled = true;
+        const sequence = [{f1: START_SIGNAL_FREQ}];
+        for (const char of text) { // textをそのままループ
+            if (charToFreqPair[char]) {
+                sequence.push(charToFreqPair[char]);
+            }
+        }
+        sequence.push({f1: END_SIGNAL_FREQ});
+        
+        await playSequence(sequence);
+        playButton.disabled = false;
+    });
+
+    function playSequence(sequence) { return new Promise(res => { let t = audioContext.currentTime; for (const {f1, f2} of sequence) { [f1, f2].forEach(freq => { if (!freq) return; const o = audioContext.createOscillator(), g = audioContext.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(freq, t); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.3,t+0.01); g.gain.linearRampToValueAtTime(0,t+NOTE_DURATION); o.connect(g).connect(audioContext.destination); o.start(t); o.stop(t+NOTE_DURATION); }); t+=NOTE_DURATION+PAUSE_DURATION; } setTimeout(res, (t-audioContext.currentTime)*1000); }); }
+    
+    listenButton.addEventListener('click', () => { initializeAudioContext(); !isListening ? startListening() : stopListening(); });
+    async function startListening() { try { audioStream = await navigator.mediaDevices.getUserMedia({audio:true}); const src = audioContext.createMediaStreamSource(audioStream); analyser = audioContext.createAnalyser(); analyser.fftSize = 8192; analyser.smoothingTimeConstant = 0.5; src.connect(analyser); isListening = true; listeningState = 'IDLE'; listenButton.textContent = '停止'; statusText.textContent = '「開始信号」待機中...'; resultDisplay.textContent = ''; kanjiConvertButton.style.display = 'none'; analyzeSound(); } catch (err) { statusText.textContent = 'マイク起動失敗'; } }
+    function stopListening() { if(audioStream) audioStream.getTracks().forEach(t=>t.stop()); cancelAnimationFrame(animationFrameId); isListening = false; listenButton.textContent = 'マイクで読み取り開始'; statusText.textContent = '待機中'; }
+
+    function analyzeSound() { if (!isListening) return; const data = new Float32Array(analyser.frequencyBinCount); analyser.getFloatFrequencyData(data); const signal = findClosestSignalFromData(data); const now = Date.now(); if (signal && now - lastDetectionTime > (NOTE_DURATION + PAUSE_DURATION) * 1000) { if (listeningState === 'IDLE' && signal.type === 'START') { listeningState = 'RECEIVING'; statusText.textContent = '信号受信中...'; } else if (listeningState === 'RECEIVING') { if (signal.type === 'END') { listeningState = 'IDLE'; statusText.textContent = '受信完了。「開始信号」待機中...'; if (resultDisplay.textContent) kanjiConvertButton.style.display = 'inline-block'; } else if (signal.type === 'CHAR') { resultDisplay.textContent += signal.char; } } lastDetectionTime = now; } animationFrameId = requestAnimationFrame(analyzeSound); }
+    
+    function findClosestSignalFromData(data) { const threshold = -55; const freqToIndex = freq => Math.round(freq * analyser.fftSize / audioContext.sampleRate); if (data[freqToIndex(START_SIGNAL_FREQ)] > threshold) return { type: 'START' }; if (data[freqToIndex(END_SIGNAL_FREQ)] > threshold) return { type: 'END' }; for (const char in charToFreqPair) { const { f1, f2 } = charToFreqPair[char]; if (data[freqToIndex(f1)] > threshold && data[freqToIndex(f2)] > threshold) return { type: 'CHAR', char: char }; } return null; }
+
+    kanjiConvertButton.addEventListener('click', async () => { const hiraganaText = resultDisplay.textContent; if (!hiraganaText) return; kanjiConvertButton.textContent = '変換中...'; kanjiConvertButton.disabled = true; try { const url = `https://www.google.com/transliterate?langpair=ja-Hira|ja&text=${encodeURIComponent(hiraganaText)}`; const response = await fetch(url); const data = await response.json(); if (data && data.length > 0) { resultDisplay.textContent = data.map(segment => segment[1][0]).join(''); } else { throw new Error('変換結果が空です。'); } } catch (error) { statusText.textContent = '漢字への変換に失敗しました。'; } finally { kanjiConvertButton.textContent = '漢字に変換'; kanjiConvertButton.disabled = false; kanjiConvertButton.style.display = 'none'; } });
 });
 </script>
 

@@ -3,119 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音響信号変換アプリ v2</title>
+    <title>音響信号変換アプリ Final</title>
+    <!-- kuromoji.jsを読み込む -->
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js"></script>
     <style>
-        /* CSSスタイル（変更なし） */
+        /* CSSスタイル */
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --background-color: #f4f7f9;
+            --text-color: #333;
+            --white-color: #fff;
+            --border-color: #ccc;
+        }
+
         body {
-            font-family: 'Helvetica Neue', Arial, 'Hiragin o Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
-            background-color: #f0f2f5;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            padding: 1em 0;
+            padding: 1em;
+            box-sizing: border-box;
         }
+
         .container {
-            background-color: #fff;
+            background-color: var(--white-color);
             padding: 2em;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 600px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 700px;
             text-align: center;
         }
+
         h1 {
-            color: #1a73e8;
+            color: var(--primary-color);
             margin-bottom: 1em;
+            font-size: 2em;
         }
+
         .section {
-            margin-bottom: 2em;
+            margin-bottom: 2.5em;
         }
+
         h2 {
-            border-bottom: 2px solid #1a73e8;
+            border-bottom: 2px solid var(--primary-color);
             padding-bottom: 0.5em;
             margin-bottom: 1em;
-            font-size: 1.2em;
+            font-size: 1.3em;
         }
+
         textarea {
             width: 100%;
-            height: 100px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            height: 120px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             font-size: 1em;
             resize: vertical;
             box-sizing: border-box;
         }
+
         button {
-            background-color: #1a73e8;
-            color: white;
+            background-color: var(--primary-color);
+            color: var(--white-color);
             border: none;
-            padding: 12px 24px;
-            border-radius: 5px;
+            padding: 14px 28px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 1em;
-            transition: background-color 0.3s;
+            font-weight: bold;
+            transition: background-color 0.3s, transform 0.1s;
             margin-top: 10px;
         }
+
         button:hover {
-            background-color: #155ab6;
+            background-color: var(--primary-hover);
         }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+
         button:disabled {
             background-color: #aaa;
             cursor: not-allowed;
         }
+
         #result-display {
             margin-top: 1em;
             padding: 1em;
-            border: 1px dashed #ccc;
-            border-radius: 5px;
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
             min-height: 50px;
-            background-color: #f9f9f9;
+            background-color: #fcfcfc;
             font-size: 1.2em;
             font-weight: bold;
-            color: #e84118;
+            color: #d63031;
             word-wrap: break-word;
             text-align: left;
         }
+
         .status {
             margin-top: 1em;
-            color: #888;
+            color: #6c757d;
             font-style: italic;
         }
-        .info {
-            font-size: 0.8em;
-            color: #555;
-            text-align: left;
-            margin-top: 1em;
-            border-left: 3px solid #1a73e8;
-            padding-left: 1em;
+        
+        /* レスポンシブ対応 */
+        @media (max-width: 600px) {
+            body {
+                padding: 0.5em;
+            }
+            .container {
+                padding: 1.5em;
+            }
+            h1 {
+                font-size: 1.8em;
+            }
+            h2 {
+                font-size: 1.2em;
+            }
+            button {
+                padding: 12px 24px;
+            }
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>独自音響信号 会話アプリ v2</h1>
+    <h1>音響信号変換アプリ Final</h1>
+    <p class="status" id="loading-status">形態素解析辞書を読み込み中... しばらくお待ちください。</p>
 
     <div class="section">
         <h2>1. 日本語テキストを音に変換</h2>
-        <textarea id="text-input" placeholder="ここにひらがなやカタカナを入力 (例: アプリカイハツ)"></textarea>
-        <button id="play-button">音に変換して再生</button>
+        <textarea id="text-input" placeholder="漢字を含む日本語を入力 (例: 今日は良い天気ですね)" disabled></textarea>
+        <button id="play-button" disabled>音に変換して再生</button>
     </div>
 
     <div class="section">
         <h2>2. 音を日本語テキストに変換</h2>
-        <button id="listen-button">マイクで読み取り開始</button>
+        <button id="listen-button" disabled>マイクで読み取り開始</button>
         <div id="result-display"></div>
         <p class="status" id="status-text">待機中</p>
-        <div class="info">
-            <strong>ヒント:</strong>
-            <p>・「読み取り開始」を押すと、まず「開始の音」を待ち受けます。</p>
-            <p>・マイクの許可ポップアップが表示されない場合、ブラウザの設定でマイクがブロックされていないか確認してください。この機能はHTTPS接続されたページでのみ動作します。</p>
-        </div>
     </div>
 </div>
 
@@ -124,13 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- グローバル変数と定数 ---
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     let audioContext;
-    let audioStream;
-    let analyser;
-    let animationFrameId;
+    let audioStream, analyser, animationFrameId;
     let isListening = false;
-    let listeningState = 'IDLE'; // 'IDLE', 'RECEIVING'
-    let lastDetectedChar = null;
-    let lastDetectionTime = 0;
+    let listeningState = 'IDLE';
+    let lastDetectedChar = null, lastDetectionTime = 0;
+    let tokenizer = null; // kuromojiのトークナイザ
 
     // --- DOM要素 ---
     const textInput = document.getElementById('text-input');
@@ -138,147 +171,153 @@ document.addEventListener('DOMContentLoaded', () => {
     const listenButton = document.getElementById('listen-button');
     const resultDisplay = document.getElementById('result-display');
     const statusText = document.getElementById('status-text');
+    const loadingStatus = document.getElementById('loading-status');
 
     // --- 信号定義 ---
-    const START_SIGNAL_FREQ = 300; // 開始信号の周波数
-    const END_SIGNAL_FREQ = 350;   // 終了信号の周波数
-    const NOTE_DURATION = 0.15;    // 1文字あたりの音の長さ
-    const PAUSE_DURATION = 0.08;   // 文字間の無音時間
+    const START_SIGNAL_FREQ = 300;
+    const END_SIGNAL_FREQ = 350;
+    const NOTE_DURATION = 0.12;
+    const PAUSE_DURATION = 0.06;
 
     // --- 文字と周波数のマッピング ---
     const charToFreq = {};
-    const freqToChar = {};
     
-    // 周波数を体系的に生成
     function assignFrequencies() {
-        let baseFreq = 440; // A4 (ラ)
-        const chars = [
-            // ひらがな
+        let baseFreq = 400;
+        const allChars = [
             'あいうえお', 'かきくけこ', 'さしすせそ', 'たちつてと', 'なにぬねの',
             'はひふへほ', 'まみむめも', 'やゆよ', 'らりるれろ', 'わをん',
             'がぎぐげご', 'ざじずぜぞ', 'だぢづでど', 'ばびぶべぼ', 'ぱぴぷぺぽ',
-            // カタカナ
+            'ぁぃぅぇぉ', 'ゃゅょ', 'っ',
             'アイウエオ', 'カキクケコ', 'サシスセソ', 'タチツテト', 'ナニヌネノ',
             'ハヒフヘホ', 'マミムメモ', 'ヤユヨ', 'ラリルレロ', 'ワヲン',
             'ガギグゲゴ', 'ザジズゼゾ', 'ダヂヅデド', 'バビブベボ', 'パピプペポ',
+            'ァィゥェォ', 'ャュョ', 'ッ',
+            'ー', '、', '。', '？', '！', '「', '」'
         ].join('');
-
-        for (const char of chars) {
+        
+        [...new Set(allChars.split(''))].sort().forEach(char => {
             charToFreq[char] = baseFreq;
-            baseFreq *= Math.pow(2, 1 / 12); // 半音ずつ上げる
-        }
-        // 逆引きマップも作成
-        for (const [char, freq] of Object.entries(charToFreq)) {
-            freqToChar[freq.toFixed(2)] = char;
-        }
+            baseFreq *= Math.pow(2, 1 / 12);
+        });
     }
     assignFrequencies();
 
+    // --- kuromoji.jsの初期化 ---
+    kuromoji.builder({ dicPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/" }).build((err, _tokenizer) => {
+        if (err) {
+            console.error(err);
+            loadingStatus.textContent = "辞書の読み込みに失敗しました。";
+            return;
+        }
+        tokenizer = _tokenizer;
+        loadingStatus.textContent = "準備完了！";
+        loadingStatus.style.color = 'green';
+        // 準備ができたらボタンを有効化
+        textInput.disabled = false;
+        playButton.disabled = false;
+        listenButton.disabled = false;
+    });
+
+    // カタカナをひらがなに変換するヘルパー関数
+    function katakanaToHiragana(src) {
+        return src.replace(/[\u30a1-\u30f6]/g, match => String.fromCharCode(match.charCodeAt(0) - 0x60));
+    }
 
     // --- AudioContextの初期化 ---
-    // ユーザーの操作があるまで初期化を遅延させる
     function initializeAudioContext() {
         if (!audioContext) {
             try {
                 audioContext = new AudioContext();
-            } catch (e) {
-                alert('Web Audio APIはこのブラウザではサポートされていません。');
-            }
+            } catch (e) { alert('Web Audio APIはこのブラウザではサポートされていません。'); }
         }
     }
 
     // --- 機能1: テキストを音に変換 ---
-    playButton.addEventListener('click', () => {
+    playButton.addEventListener('click', async () => {
         initializeAudioContext();
         const text = textInput.value;
-        if (!text || !audioContext) return;
+        if (!text || !audioContext || !tokenizer) return;
+
+        playButton.disabled = true;
+        playButton.textContent = "変換中...";
+        
+        // kuromojiでテキストを解析し、読み仮名（ひらがな）の文字列を生成
+        const tokens = tokenizer.tokenize(text);
+        let hiraganaText = "";
+        tokens.forEach(token => {
+            const reading = token.reading; // 読みはカタカナで返ってくる
+            if (reading) {
+                hiraganaText += katakanaToHiragana(reading);
+            } else {
+                // 読みがない記号などはそのまま追加
+                hiraganaText += token.surface_form;
+            }
+        });
 
         const sequence = [START_SIGNAL_FREQ];
-        for (const char of text) {
+        for (const char of hiraganaText) {
             if (charToFreq[char]) {
                 sequence.push(charToFreq[char]);
             }
         }
         sequence.push(END_SIGNAL_FREQ);
         
-        playFrequencySequence(sequence);
+        await playFrequencySequence(sequence);
+        playButton.textContent = "音に変換して再生";
+        playButton.disabled = false;
     });
 
-    async function playFrequencySequence(sequence) {
-        playButton.disabled = true;
-        let currentTime = audioContext.currentTime;
-
-        for (const freq of sequence) {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(freq, currentTime);
-            
-            gainNode.connect(audioContext.destination);
-            gainNode.gain.setValueAtTime(0, currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.5, currentTime + 0.01);
-            gainNode.gain.linearRampToValueAtTime(0, currentTime + NOTE_DURATION);
-
-            oscillator.connect(gainNode);
-            oscillator.start(currentTime);
-            oscillator.stop(currentTime + NOTE_DURATION);
-
-            currentTime += NOTE_DURATION + PAUSE_DURATION;
-        }
-        setTimeout(() => { playButton.disabled = false; }, (currentTime - audioContext.currentTime) * 1000);
+    function playFrequencySequence(sequence) {
+        return new Promise(resolve => {
+            let currentTime = audioContext.currentTime;
+            for (const freq of sequence) {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(freq, currentTime);
+                gainNode.connect(audioContext.destination);
+                gainNode.gain.setValueAtTime(0, currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.5, currentTime + 0.01);
+                gainNode.gain.linearRampToValueAtTime(0, currentTime + NOTE_DURATION);
+                oscillator.connect(gainNode);
+                oscillator.start(currentTime);
+                oscillator.stop(currentTime + NOTE_DURATION);
+                currentTime += NOTE_DURATION + PAUSE_DURATION;
+            }
+            setTimeout(resolve, (currentTime - audioContext.currentTime) * 1000);
+        });
     }
 
-    // --- 機能2: 音をテキストに変換 ---
+    // --- 機能2: 音をテキストに変換 --- (変更なし)
     listenButton.addEventListener('click', () => {
         initializeAudioContext();
         if (!audioContext) return;
-
-        if (!isListening) {
-            startListening();
-        } else {
-            stopListening();
-        }
+        !isListening ? startListening() : stopListening();
     });
 
     async function startListening() {
         try {
             audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const source = audioContext.createMediaStreamSource(audioStream);
-            
             analyser = audioContext.createAnalyser();
-            analyser.fftSize = 16384; // 周波数解像度を上げる
-            analyser.minDecibels = -90;
-            analyser.maxDecibels = -10;
-            analyser.smoothingTimeConstant = 0.8;
-
+            analyser.fftSize = 16384;
             source.connect(analyser);
-
             isListening = true;
             listeningState = 'IDLE';
             listenButton.textContent = '読み取り停止';
             statusText.textContent = '「開始信号」を待機中...';
             resultDisplay.textContent = '';
-            
             analyzeSound();
-
         } catch (err) {
-            if (err.name === 'NotAllowedError') {
-                statusText.textContent = 'マイクの使用が許可されませんでした。ブラウザの設定を確認してください。';
-            } else {
-                statusText.textContent = 'マイクの起動に失敗しました。';
-            }
-            console.error('マイクへのアクセスエラー:', err);
+            statusText.textContent = 'マイクの起動に失敗しました。ブラウザの設定等を確認してください。';
+            console.error(err);
         }
     }
 
     function stopListening() {
-        if (audioStream) {
-            audioStream.getTracks().forEach(track => track.stop());
-        }
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-        }
+        if (audioStream) audioStream.getTracks().forEach(track => track.stop());
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
         isListening = false;
         listeningState = 'IDLE';
         listenButton.textContent = 'マイクで読み取り開始';
@@ -288,31 +327,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function analyzeSound() {
         if (!isListening) return;
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Float32Array(bufferLength);
+        const dataArray = new Float32Array(analyser.frequencyBinCount);
         analyser.getFloatFrequencyData(dataArray);
 
-        let maxVal = -Infinity;
-        let maxIndex = -1;
-
-        for (let i = 0; i < bufferLength; i++) {
-            if (dataArray[i] > maxVal) {
-                maxVal = dataArray[i];
-                maxIndex = i;
-            }
+        let maxVal = -Infinity, maxIndex = -1;
+        for (let i = 0; i < dataArray.length; i++) {
+            if (dataArray[i] > maxVal) { maxVal = dataArray[i]; maxIndex = i; }
         }
 
-        if (maxVal > -60) { // ノイズフィルタの閾値を少し調整
-            const detectedFreq = maxIndex * audioContext.sampleRate / analyser.fftSize;
-            const signal = findClosestSignal(detectedFreq);
-
+        if (maxVal > -65) {
+            const freq = maxIndex * audioContext.sampleRate / analyser.fftSize;
+            const signal = findClosestSignal(freq);
             const now = Date.now();
-            if (signal && (signal.char !== lastDetectedChar || now - lastDetectionTime > 300)) {
-                
+            if (signal && (signal.char !== lastDetectedChar || now - lastDetectionTime > (NOTE_DURATION + PAUSE_DURATION) * 900)) {
                 if (listeningState === 'IDLE' && signal.type === 'START') {
                     listeningState = 'RECEIVING';
-                    statusText.textContent = '信号受信中...（「終了信号」で完了）';
-                    resultDisplay.textContent = '';
+                    statusText.textContent = '信号受信中...';
                 } else if (listeningState === 'RECEIVING') {
                     if (signal.type === 'END') {
                         listeningState = 'IDLE';
@@ -327,33 +357,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             lastDetectedChar = null;
         }
-
         animationFrameId = requestAnimationFrame(analyzeSound);
     }
     
     function findClosestSignal(freq) {
-        const tolerance = 15; // 許容する周波数の誤差 (Hz)
-
-        // 識別コードのチェック
+        const tolerance = 15;
         if (Math.abs(freq - START_SIGNAL_FREQ) < tolerance) return { type: 'START', char: 'START' };
         if (Math.abs(freq - END_SIGNAL_FREQ) < tolerance) return { type: 'END', char: 'END' };
 
-        // 文字のチェック
-        let closestChar = null;
-        let minDiff = Infinity;
+        let closestChar = null, minDiff = Infinity;
         for (const char in charToFreq) {
-            const targetFreq = charToFreq[char];
-            const diff = Math.abs(freq - targetFreq);
-            if (diff < minDiff && diff < tolerance) {
-                minDiff = diff;
-                closestChar = char;
-            }
+            const diff = Math.abs(freq - charToFreq[char]);
+            if (diff < minDiff && diff < tolerance) { minDiff = diff; closestChar = char; }
         }
-        
-        if(closestChar) {
-            return { type: 'CHAR', char: closestChar };
-        }
-        return null;
+        return closestChar ? { type: 'CHAR', char: closestChar } : null;
     }
 });
 </script>

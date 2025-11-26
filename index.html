@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ジオメタリートレーニング - ステージエディタ</title>
+    <link rel="stylesheet" href="editor_style.css">
+</head>
+<body>
+    <header>
+        <h1>ジオメタリートレーニング - ステージエディタ</h1>
+        <p>編集したいレベルのタブを選択し、グリッド上でステージを作成してください。</p>
+    </header>
+
+    <div id="editor-container">
+        <!-- オブジェクト選択ツールボックス -->
+        <div id="toolbox">
+            <h2>ツールモード</h2>
+            <div class="tool-mode-selector">
+                <div class="tool-mode-btn selected" data-mode="pencil" title="ペンシル (1つずつ配置)">✏️</div>
+                <div class="tool-mode-btn" data-mode="rectangle" title="矩形フィル (ドラッグで範囲を塗りつぶし)">⬜</div>
+                <div class="tool-mode-btn" data-mode="select" title="選択 (ドラッグで範囲を選択し、移動/削除)">⬚</div>
+            </div>
+            <hr>
+            <h2>オブジェクト</h2>
+            <div class="tool-item selected" data-char="#" data-type="block"><div class="preview block"></div>ブロック (#)</div>
+            <div class="tool-item" data-char="^" data-type="spike"><div class="preview spike"></div>トゲ / 上向き (^)</div>
+            <div class="tool-item" data-char="v" data-type="spike_down"><div class="preview spike_down"></div>トゲ / 下向き (v)</div>
+            <div class="tool-item" data-char="J" data-type="pad"><div class="preview pad"></div>ジャンプパッド (J)</div>
+            <div class="tool-item" data-char="O" data-type="orb"><div class="preview orb"></div>ジャンプオーブ (O)</div>
+            <div class="tool-item" data-char="G" data-type="goal"><div class="preview goal"></div>ゴール (G)</div>
+            <hr>
+            <div class="tool-item" data-char="S" data-type="portal_ship"><div class="preview portal_ship"></div>ポータル: 飛行開始 (S)</div>
+            <div class="tool-item" data-char="C" data-type="portal_cube"><div class="preview portal_cube"></div>ポータル: 飛行終了 (C)</div>
+            <hr>
+            <div class="tool-item" data-char="V" data-type="portal_gravity_flip"><div class="preview portal_gravity_flip"></div>ポータル: 重力反転 (V)</div>
+            <div class="tool-item" data-char="N" data-type="portal_gravity_normal"><div class="preview portal_gravity_normal"></div>ポータル: 重力正常化 (N)</div>
+            <hr>
+            <div class="tool-item" data-char=" " data-type="eraser"><div class="preview eraser"></div>消しゴム (Space)</div>
+        </div>
+
+        <!-- ステージ編集エリア -->
+        <div id="main-editor-area">
+            <div class="level-tabs">
+                <button class="level-tab selected" data-level="1">レベル 1</button>
+                <button class="level-tab" data-level="2">レベル 2</button>
+                <button class="level-tab" data-level="3">レベル 3</button>
+            </div>
+            <div id="canvas-wrapper">
+                <canvas id="editorCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- 設定とコード出力 -->
+        <div id="controls">
+            <h2>設定 (レベル <span id="current-level-indicator">1</span>)</h2>
+            <div class="control-group">
+                <label for="grid-width">ステージの幅 (列数):</label>
+                <input type="number" id="grid-width" value="100" min="20" max="1000">
+            </div>
+            <button id="btn-resize">サイズ変更</button>
+            <hr>
+            <h2>選択範囲の操作</h2>
+            <p id="selection-info" class="muted-text">「選択」モードで範囲を指定してください</p>
+            <button id="btn-delete-selection" disabled>選択範囲を削除 (Delete)</button>
+            <hr>
+            <!-- Load from Paste -->
+            <h2>貼り付けで読み込み</h2>
+            <textarea id="paste-area" placeholder="ここに levels.js の内容を貼り付けてください..."></textarea>
+            <button id="btn-load-from-paste">貼り付けた内容を読み込む</button>
+            <p id="load-feedback"></p>
+            <hr>
+            <!-- Generate Code -->
+            <h2>コード出力</h2>
+            <button id="btn-generate">levels.js の全コードを生成</button>
+            <textarea id="output-code" readonly placeholder="ここに levels.js の全コードが生成されます。"></textarea>
+            <button id="btn-copy">クリップボードにコピー</button>
+            <p id="copy-feedback"></p>
+        </div>
+    </div>
+
+    <script src="editor_script.js"></script>
+</body>
+</html>
